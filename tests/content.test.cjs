@@ -6,19 +6,36 @@ function runSuite(content) {
   new Function(content);
   const results = [];
 
-  function tab() {
+  function tab(options = {}) {
     let now = 0, messageListener, interval, queued = [], generating = false;
     let pathname = "/c/example";
     const sent = [];
-    const prompt = { innerText: "", focus() {}, getClientRects() { return [1]; } };
+    const composer = {
+      contains(button) { return button === send; },
+      querySelectorAll(selector) {
+        if (selector === 'button[type="submit"]' && options.buttonType === "submit") return [send];
+        if (selector === "button") return options.missingSend ? [] : [send];
+        return [];
+      }
+    };
+    const prompt = {
+      innerText: "", focus() {}, getClientRects() { return [1]; },
+      closest(selector) { return selector === "form" ? composer : null; }
+    };
     const stop = { getClientRects() { return generating ? [1] : []; } };
     const turns = [
       { innerText: "Eski yanıt", getAttribute() { return "assistant"; } }
     ];
     const send = {
       disabled: false, getClientRects() { return [1]; },
-      getAttribute() { return null; },
+      closest() { return null; },
+      getAttribute(name) {
+        if (name === "data-testid") return options.testId ?? "send-button";
+        if (name === "type") return options.buttonType ?? "button";
+        return null;
+      },
       click() {
+        if (options.noopClick) return;
         sent.push(prompt.innerText);
         turns.push({
           innerText: prompt.innerText, getAttribute() { return "user"; }
@@ -30,7 +47,7 @@ function runSuite(content) {
       querySelector(selector) {
         if (selector === '[data-testid="stop-button"]') return stop;
         if (selector === '#prompt-textarea[contenteditable="true"]') return prompt;
-        if (selector === 'button[data-testid="send-button"]') return send;
+
         return null;
       },
       querySelectorAll(selector) {
@@ -38,6 +55,12 @@ function runSuite(content) {
           return turns.filter(turn => turn.getAttribute() === "assistant");
         }
         if (selector === "[data-message-author-role]") return turns;
+        if (options.missingSend) return [];
+        const id = options.testId ?? "send-button";
+        if (selector === 'button[data-testid="' + id + '"]') return [send];
+        if (selector === 'button[data-testid$="-send-button"]' && id.endsWith("-send-button")) return [send];
+        if (selector === 'button[data-testid$="-submit-button"]' && id.endsWith("-submit-button")) return [send];
+        if (selector === "button[data-testid], button[type=\"submit\"]") return [send];
         return [];
       },
       execCommand(_command, _ui, value) {
@@ -197,6 +220,33 @@ function runSuite(content) {
     t.navigate("/c/another");
     t.advance(700);
     return !t.message("DEVAM_STATUS").active;
+  });
+
+  t = tab({ testId: "composer-submit-button", buttonType: "submit" });
+  check("New ChatGPT composer submit button sends", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: false });
+    t.advance(3600);
+    t.flush();
+    return t.sent.length === 1 && t.sent[0] === "devam et";
+  });
+
+  t = tab({ testId: "unlabelled-control", buttonType: "submit" });
+  check("Unique composer submit fallback sends", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: false });
+    t.advance(3600);
+    t.flush();
+    return t.sent.length === 1;
+  });
+
+  t = tab({ missingSend: true });
+  check("Unknown button leaves unsent draft with diagnostics", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.advance(3600);
+    for (let i = 0; i < 10; i++) t.flush();
+    return t.sent.length === 0 &&
+      t.prompt.innerText.includes("Devam protokolü") &&
+      !t.message("DEVAM_STATUS").active &&
+      t.message("DEVAM_STATUS").detail.includes("Gönder düğmesi bulunamadı");
   });
 
   return results;
