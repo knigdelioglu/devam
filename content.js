@@ -177,12 +177,12 @@
       stop("Mesaj kutusu değişti; gönderim iptal edildi.");
       return;
     }
-    const send = getSendButton();
+    const send = getSendButton(prompt);
     if (!send) {
       if (attempt < 8) {
         setTimeout(() => sendAfterInput(token, attempt + 1), 200);
       } else {
-        stop("Gönder düğmesi bulunamadı; hazırlanmış mesaj gönderilmedi.");
+        stop("Gönder düğmesi bulunamadı; mesaj kutusunda taslak bırakıldı. Düğmeler: " + sendButtonDiagnostic(prompt));
       }
       return;
     }
