@@ -19,13 +19,17 @@
     </section>
     <label for="limit">En fazla otomatik devam</label>
     <input id="limit" type="number" min="1" max="100" step="1" value="20" inputmode="numeric">
-    <p class="hint">Yalnızca bu sekmede çalışır. Sayfa yenilenirse kapanır.</p>
+    <label class="checkrow" for="smart">
+      <input id="smart" type="checkbox" checked>
+      <span>Akıllı mod <small>İş bitince kendiliğinden durur</small></span>
+    </label>
     <p id="count" class="count">Gönderilen: 0 / 20</p>
     <div class="actions">
-      <button type="button" id="start">Başlat</button>
-      <button type="button" id="stop" class="secondary" disabled>Durdur</button>
+      <button type="button" id="start">Şimdi devam et</button>
+      <button type="button" id="wait" class="secondary">Yanıtı bekle</button>
     </div>
-    <p class="note">Taslağını değiştirmez; yanıt tamamlanmadan göndermez.</p>
+    <button type="button" id="stop" class="stop" disabled>Durdur</button>
+    <p class="note">Sadece bu sekme. Taslağın korunur; sayfa yenilenirse kapanır.</p>
   </main>
 </body>
 </html>
