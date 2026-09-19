@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Devam",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "ChatGPT sekmesinde akıllı veya düz otomatik devam; tamamlanmış sohbeti sürdürme.",
   "permissions": [
     "activeTab"
