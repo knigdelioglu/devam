@@ -3,8 +3,10 @@
 
   const $ = id => document.getElementById(id);
   const start = $("start");
+  const wait = $("wait");
   const stop = $("stop");
   const limit = $("limit");
+  const smart = $("smart");
   const stateLabel = $("state");
   const detail = $("detail");
   const count = $("count");
@@ -18,7 +20,10 @@
     detail.textContent = message;
     indicator.classList.remove("active");
     start.disabled = true;
+    wait.disabled = true;
     stop.disabled = true;
+    limit.disabled = true;
+    smart.disabled = true;
   }
 
   function render(status) {
@@ -28,11 +33,13 @@
     }
     if (!initialized) {
       limit.value = status.limit;
+      smart.checked = status.smart;
       initialized = true;
     }
     const labels = {
       stopped: "Kapalı",
       waiting: "Etkin · bekliyor",
+      awaiting: "Yeni yanıt bekleniyor",
       generating: "Yanıt üretiliyor",
       settling: "Yanıt kontrol ediliyor",
       composing: "Devam gönderiliyor"
@@ -42,8 +49,10 @@
     count.textContent = "Gönderilen: " + status.count + " / " + status.limit;
     indicator.classList.toggle("active", status.active);
     start.disabled = busy || status.active;
+    wait.disabled = busy || status.active;
     stop.disabled = busy || !status.active;
     limit.disabled = busy || status.active;
+    smart.disabled = busy || status.active;
   }
 
   async function message(type, extra = {}) {
@@ -56,17 +65,17 @@
     try {
       render(await message("DEVAM_STATUS"));
     } catch {
-      unavailable("Eklentiyi yükledikten sonra ChatGPT sekmesini yenile.");
+      unavailable("Eklentiyi güncelledikten sonra ChatGPT sekmesini yenile.");
     }
   }
 
   async function action(type, extra = {}) {
     busy = true;
     start.disabled = true;
+    wait.disabled = true;
     stop.disabled = true;
     try {
-      const response = await message(type, extra);
-      render(response);
+      render(await message(type, extra));
     } catch {
       unavailable("ChatGPT sekmesiyle bağlantı kurulamadı. Sekmeyi yenile.");
     } finally {
@@ -75,14 +84,17 @@
     }
   }
 
-  start.addEventListener("click", () => {
+  function begin(mode) {
     const value = Number(limit.value);
     if (!Number.isInteger(value) || value < 1 || value > 100) {
       detail.textContent = "Tekrar sınırı 1 ile 100 arasında tam sayı olmalı.";
       return;
     }
-    action("DEVAM_START", { limit: value });
-  });
+    action("DEVAM_START", { mode, limit: value, smart: smart.checked });
+  }
+
+  start.addEventListener("click", () => begin("now"));
+  wait.addEventListener("click", () => begin("wait"));
   stop.addEventListener("click", () => action("DEVAM_STOP"));
 
   (async () => {
