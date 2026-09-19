@@ -65,20 +65,61 @@
       : prompt.innerText || prompt.textContent || "").trim();
   }
 
-  function getSendButton() {
-    for (const selector of [
+  function getSendButton(prompt) {
+    // Limit fallback discovery to the composer, not other dialogs or the page.
+    const composer = prompt.closest?.("form") ||
+      prompt.closest?.('[data-testid="composer"]');
+    const selectors = [
       'button[data-testid="send-button"]',
+      'button[data-testid="composer-submit-button"]',
+      'button[data-testid="composer-send-button"]',
+      'button[data-testid="submit-button"]',
+      'button[data-testid$="-send-button"]',
+      'button[data-testid$="-submit-button"]',
+      'button[aria-label="Send"]',
       'button[aria-label="Send prompt"]',
       'button[aria-label="Send message"]',
       'button[aria-label="Gönder"]',
-      'button[aria-label="Mesajı gönder"]'
-    ]) {
-      const button = document.querySelector(selector);
-      if (visible(button) && !button.disabled && button.getAttribute("aria-disabled") !== "true") {
-        return button;
+      'button[aria-label="Mesajı gönder"]',
+      'button[title="Send"]',
+      'button[title="Gönder"]'
+    ];
+    const eligible = button => visible(button) && !button.disabled &&
+      button.getAttribute("aria-disabled") !== "true" &&
+      !button.closest?.('[aria-hidden="true"]');
+
+    // Use exact semantic identifiers first, checking every match rather than
+    // accidentally returning the first hidden/disabled button.
+    for (const selector of selectors) {
+      const candidates = [...document.querySelectorAll(selector)].filter(eligible);
+      if (candidates.length === 1) {
+        if (!composer || composer.contains(candidates[0])) return candidates[0];
       }
     }
+
+    // Recent ChatGPT composers sometimes expose a plain submit button without
+    // a send-related test ID or label. Never use a generic page-wide button.
+    if (composer) {
+      const submits = [...composer.querySelectorAll('button[type="submit"]')]
+        .filter(eligible);
+      if (submits.length === 1) return submits[0];
+    }
     return null;
+  }
+
+  function sendButtonDiagnostic(prompt) {
+    const composer = prompt.closest?.("form") ||
+      prompt.closest?.('[data-testid="composer"]');
+    const candidates = composer
+      ? [...composer.querySelectorAll("button")]
+      : [...document.querySelectorAll('button[data-testid], button[type="submit"]')];
+    return candidates.filter(visible).map(button =>
+      [
+        button.getAttribute("data-testid"),
+        button.getAttribute("aria-label"),
+        button.getAttribute("type")
+      ].filter(Boolean).join("/")
+    ).filter(Boolean).slice(-8).join(", ") || "tanımlayıcı yok";
   }
 
   function route() {
