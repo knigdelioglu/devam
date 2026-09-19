@@ -91,9 +91,12 @@ function runSuite(content) {
       },
       advance(ms) { now += ms; interval?.(); },
       flush() {
-        const tasks = queued;
-        queued = [];
-        tasks.forEach(task => task());
+        for (let i = 0; queued.length && i < 100; i++) {
+          const tasks = queued;
+          queued = [];
+          tasks.forEach(task => task());
+        }
+        if (queued.length) throw new Error("Test callback queue did not settle");
       },
       generating(value) { generating = value; },
       reply(value) {
