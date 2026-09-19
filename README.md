@@ -25,6 +25,10 @@ Eklentinin gönderdiği mesaj `devam et` talimatıyla birlikte iki makinece okun
 
 Akıllı modla ilk defa devralınan, daha önce bu protokolü almamış yanıtta işaret bulunması beklenmez; eklenti ilk devam mesajıyla protokolü başlatır. Bundan sonraki yanıtlarda işaret çıkmazsa tahmin edip devam etmek yerine durur. İşaretler modelin **beyanıdır**, gerçek işin eksiksiz tamamlandığının doğrulaması değildir. Akıllı mod kapatılırsa her seferinde yalnızca `devam et` gönderilir ve tekrar sınırına kadar eski davranışa dönülür.
 
+## Gönder düğmesi bulunamazsa
+
+ChatGPT arayüzü değişirse eklenti mesajı kutuda taslak olarak bırakır, göndermeyi tekrar tekrar denemez. Açılır pencerede durma gerekçesi ve bulunabilen düğmelerin tanımlayıcıları görünür. Güncellemeden sonra sayfayı yenile; önceki taslağı kendin gönder veya sil, ardından tekrar başlat.
+
 ## Koruma ve sınırlar
 
 - Gönderme öncesinde stop düğmesinin kaybolmasını ve son cevabın yaklaşık 3,5 saniye sabit kalmasını bekler.
@@ -40,4 +44,4 @@ Derleme, bağımlılık veya Node.js gerekmez. `manifest.json`, `content.js`, `p
 
 ## Test
 
-`node tests/content.test.cjs` komutu 11 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
+`node tests/content.test.cjs` komutu 15 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
