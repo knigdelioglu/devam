@@ -20,7 +20,7 @@
     const exact = document.querySelector('[data-testid="stop-button"]');
     if (visible(exact)) return true;
     return [...document.querySelectorAll("button[aria-label]")].some(button =>
-      visible(button) && /^(stop|durdur)(?:\\b|\\s|$)/i.test(button.getAttribute("aria-label") || "")
+      visible(button) && /^(stop|durdur)(?:\b|\s|$)/i.test(button.getAttribute("aria-label") || "")
     );
   }
 
@@ -70,7 +70,7 @@
   }
 
   function route() {
-    return location.pathname.match(/^\\/c\\/[^/]+/)?.[0] || location.pathname;
+    return location.pathname.match(/^\/c\/[^/]+/)?.[0] || location.pathname;
   }
 
   function stop(detail) {
