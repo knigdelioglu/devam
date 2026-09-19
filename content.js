@@ -1,15 +1,24 @@
 (function () {
   "use strict";
 
-  // All state belongs to this one ChatGPT tab. A reload intentionally turns it off.
-  const MESSAGE = "devam et";
+  // This instance is local to one ChatGPT tab. Reloading intentionally disables it.
+  const SIMPLE_MESSAGE = "devam et";
+  const SMART_MESSAGE = [
+    "devam et.",
+    "",
+    "Devam protokolü: Önceki görevin henüz tamamlanmadıysa kaldığın yerden ilerle.",
+    "Her cevabının en son satırına, yapılacak iş kaldıysa [[DEVAM:SUR]],",
+    "bütün iş tamamlandıysa [[DEVAM:TAMAM]] yaz.",
+    "Yalnızca bu iki işaretten birini kullan. Tamamladığın işleri gereksiz yere tekrarlama."
+  ].join("\n");
   const SETTLE_MS = 3500;
   const TICK_MS = 700;
   const state = {
     active: false, phase: "stopped", detail: "Başlatılmadı.",
-    count: 0, limit: 20, timer: null, token: 0,
-    route: null, baseline: null, stopGoneAt: 0,
-    textChangedAt: 0, lastText: ""
+    count: 0, limit: 20, smart: true, timer: null, token: 0,
+    route: null, baseline: null, firstReply: true,
+    stopGoneAt: 0, textChangedAt: 0, lastText: "",
+    pendingMessage: null, sentAt: 0
   };
 
   function visible(element) {
@@ -51,20 +60,23 @@
   }
 
   function promptText(prompt) {
-    return (prompt instanceof HTMLTextAreaElement ? prompt.value : prompt.innerText || prompt.textContent || "").trim();
+    return (prompt instanceof HTMLTextAreaElement
+      ? prompt.value
+      : prompt.innerText || prompt.textContent || "").trim();
   }
 
   function getSendButton() {
-    const selectors = [
+    for (const selector of [
       'button[data-testid="send-button"]',
       'button[aria-label="Send prompt"]',
       'button[aria-label="Send message"]',
       'button[aria-label="Gönder"]',
       'button[aria-label="Mesajı gönder"]'
-    ];
-    for (const selector of selectors) {
+    ]) {
       const button = document.querySelector(selector);
-      if (visible(button) && !button.disabled && button.getAttribute("aria-disabled") !== "true") return button;
+      if (visible(button) && !button.disabled && button.getAttribute("aria-disabled") !== "true") {
+        return button;
+      }
     }
     return null;
   }
@@ -78,6 +90,7 @@
     state.phase = "stopped";
     state.detail = detail;
     state.token++;
+    state.pendingMessage = null;
     clearInterval(state.timer);
     state.timer = null;
   }
@@ -85,7 +98,7 @@
   function routeChanged() {
     const current = route();
     if (current === state.route) return false;
-    // A new conversation naturally changes / into /c/<id>.
+    // A newly opened conversation can naturally change / into /c/<id>.
     if (state.route === "/" && current.startsWith("/c/")) {
       state.route = current;
       return false;
@@ -94,29 +107,33 @@
     return true;
   }
 
-  function insertMessage(prompt) {
+  function insertMessage(prompt, message) {
     prompt.focus();
     if (prompt instanceof HTMLTextAreaElement) {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
-      setter.call(prompt, MESSAGE);
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      if (!setter) return false;
+      setter.call(prompt, message);
       prompt.dispatchEvent(new Event("input", { bubbles: true }));
     } else {
-      // Chromium's editing command goes through contenteditable's native input path.
-      // Direct innerHTML assignment is intentionally avoided (React/ProseMirror).
-      if (!document.execCommand("insertText", false, MESSAGE)) return false;
+      // Use the native editing input path rather than assigning innerHTML in React.
+      if (!document.execCommand("insertText", false, message)) return false;
     }
-    return promptText(prompt) === MESSAGE;
+    return promptText(prompt) === message;
+  }
+
+  function marker(text) {
+    return text.match(/\[\[DEVAM:(SUR|TAMAM)\]\]\s*$/)?.[1] || null;
   }
 
   function sendAfterInput(token, attempt = 0) {
     if (!state.active || state.token !== token || state.phase !== "composing" || routeChanged()) return;
     if (stopVisible()) {
-      stop("Yanıt yeniden üretime geçti; gönderim iptal edildi.");
+      stop("ChatGPT yeniden üretime geçti; gönderim iptal edildi.");
       return;
     }
     const prompt = getPrompt();
-    if (!prompt || promptText(prompt) !== MESSAGE) {
-      stop("Mesaj kutusu değişti; güvenlik için durduruldu.");
+    if (!prompt || promptText(prompt) !== state.pendingMessage) {
+      stop("Mesaj kutusu değişti; gönderim iptal edildi.");
       return;
     }
     const send = getSendButton();
@@ -124,36 +141,97 @@
       if (attempt < 8) {
         setTimeout(() => sendAfterInput(token, attempt + 1), 200);
       } else {
-        stop("Gönder düğmesi bulunamadı. Taslak gönderilmedi.");
+        stop("Gönder düğmesi bulunamadı; hazırlanmış mesaj gönderilmedi.");
       }
       return;
     }
+    // Capture the old response before clicking; watch for a genuinely new reply.
+    state.baseline = assistantSnapshot();
+    state.firstReply = false;
+    state.phase = "awaiting";
+    state.detail = "Devam gönderildi; yeni yanıt bekleniyor.";
+    state.pendingMessage = null;
+    state.sentAt = Date.now();
     send.click();
     state.count++;
     if (state.count >= state.limit) {
       stop("Tekrar sınırına ulaşıldı (" + state.limit + ").");
-    } else {
-      state.phase = "waiting";
-      state.detail = "Devam gönderildi; yeni yanıt bekleniyor.";
-      state.baseline = null;
     }
+  }
+
+  function sendContinuation() {
+    if (!state.active || routeChanged() || state.phase === "composing" || stopVisible()) return;
+    if (state.count >= state.limit) {
+      stop("Tekrar sınırına ulaşıldı.");
+      return;
+    }
+    const prompt = getPrompt();
+    if (!prompt) {
+      stop("Mesaj kutusu bulunamadı; gönderim yapılmadı.");
+      return;
+    }
+    if (promptText(prompt)) {
+      stop("Mesaj kutusunda kendi taslağın var; üzerine yazılmadı.");
+      return;
+    }
+    const message = state.smart ? SMART_MESSAGE : SIMPLE_MESSAGE;
+    state.pendingMessage = message;
+    state.phase = "composing"; // Consumes this reply before any asynchronous work.
+    state.detail = "Devam mesajı hazırlanıyor.";
+    if (!insertMessage(prompt, message)) {
+      stop("Mesaj kutusuna güvenilir biçimde yazılamadı.");
+      return;
+    }
+    const token = state.token;
+    setTimeout(() => sendAfterInput(token), 250);
+  }
+
+  function onCompletedResponse(snapshot) {
+    const decision = marker(snapshot.text);
+    if (state.smart) {
+      if (decision === "TAMAM") {
+        stop("ChatGPT [[DEVAM:TAMAM]] ile işi bitirdiğini bildirdi.");
+        return;
+      }
+      // A manually started conversation has not received our protocol yet.
+      // Only this first reply is allowed to lack the marker.
+      if (decision !== "SUR" && !state.firstReply) {
+        stop("Devam işareti bulunamadı; kontrolsüz döngü önlendi.");
+        return;
+      }
+    }
+    sendContinuation();
   }
 
   function tick() {
     if (!state.active || routeChanged()) return;
-    const isGenerating = stopVisible();
+    const generating = stopVisible();
     const now = Date.now();
 
-    if (state.phase === "waiting") {
-      if (!isGenerating) return; // Never react to historical/completed answers.
-      state.baseline = assistantSnapshot();
-      state.phase = "generating";
-      state.detail = "ChatGPT yanıt üretiyor.";
+    if (state.phase === "waiting" || state.phase === "awaiting") {
+      const snapshot = assistantSnapshot();
+      const changed = state.phase === "awaiting" &&
+        state.baseline &&
+        (snapshot.count > state.baseline.count ||
+         (snapshot.count === state.baseline.count && snapshot.text !== state.baseline.text));
+      if (!generating && !changed) {
+        // Detect a send button that did not actually dispatch a user turn.
+        if (state.phase === "awaiting" && now - state.sentAt > 15000) {
+          stop("Yeni yanıt başlamadı; devam gönderimi doğrulanamadı.");
+        }
+        return;
+      }
+      state.phase = generating ? "generating" : "settling";
+      state.stopGoneAt = now;
+      state.textChangedAt = now;
+      state.lastText = snapshot.text;
+      if (state.phase === "waiting") state.baseline = snapshot;
+      state.detail = generating ? "ChatGPT yanıt üretiyor." : "Yanıt kontrol ediliyor.";
       return;
     }
 
     if (state.phase === "generating") {
-      if (isGenerating) return;
+      if (generating) return;
       state.phase = "settling";
       state.stopGoneAt = now;
       state.textChangedAt = now;
@@ -163,7 +241,7 @@
     }
 
     if (state.phase !== "settling") return;
-    if (isGenerating) {
+    if (generating) {
       state.phase = "generating";
       state.detail = "ChatGPT yanıt üretiyor.";
       return;
@@ -176,37 +254,19 @@
     }
     if (now - state.stopGoneAt < SETTLE_MS || now - state.textChangedAt < SETTLE_MS) return;
     if (!lastTurnIsAssistant() || !snapshot.text ||
-        (snapshot.count <= state.baseline.count && snapshot.text === state.baseline.text)) {
+        (state.baseline && snapshot.count <= state.baseline.count &&
+         snapshot.text === state.baseline.text)) {
       stop("Yeni bir asistan yanıtı doğrulanamadı.");
       return;
     }
-    const prompt = getPrompt();
-    if (!prompt) {
-      stop("Mesaj kutusu bulunamadı; gönderim yapılmadı.");
-      return;
-    }
-    if (promptText(prompt)) {
-      stop("Mesaj kutusunda kendi taslağın var; üzerine yazılmadı.");
-      return;
-    }
-    if (state.count >= state.limit) {
-      stop("Tekrar sınırına ulaşıldı.");
-      return;
-    }
-    // Mark this response consumed before any async work; prevents duplicate sends.
-    state.phase = "composing";
-    state.detail = "Devam mesajı hazırlanıyor.";
-    if (!insertMessage(prompt)) {
-      stop("Mesaj kutusuna güvenilir biçimde yazılamadı.");
-      return;
-    }
-    const token = state.token;
-    setTimeout(() => sendAfterInput(token), 250);
+    onCompletedResponse(snapshot);
   }
 
   function status() {
-    return { active: state.active, phase: state.phase, detail: state.detail,
-      count: state.count, limit: state.limit };
+    return {
+      active: state.active, phase: state.phase, detail: state.detail,
+      count: state.count, limit: state.limit, smart: state.smart
+    };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, reply) => {
@@ -221,21 +281,47 @@
         reply({ error: "Tekrar sınırı 1–100 arasında olmalı." });
         return;
       }
-      if (state.active) stop("Yeniden başlatılıyor.");
+      const mode = message.mode === "now" ? "now" : message.mode === "wait" ? "wait" : null;
+      if (!mode) {
+        reply({ error: "Başlatma modu geçersiz." });
+        return;
+      }
+      // Do not replace an active run or its in-flight send with a second one.
+      if (state.active) {
+        reply({ error: "Bu sekmede zaten aktif. Önce Durdur'a bas." });
+        return;
+      }
+      const generating = stopVisible();
+      const snapshot = assistantSnapshot();
+      if (mode === "now" && !generating && (!lastTurnIsAssistant() || !snapshot.text)) {
+        reply({ error: "Devam ettirilecek tamamlanmış bir asistan yanıtı bulunamadı." });
+        return;
+      }
       state.active = true;
       state.phase = "waiting";
-      state.detail = "Bir sonraki yanıtın başlaması bekleniyor.";
+      state.detail = "Bir sonraki yanıt bekleniyor.";
       state.count = 0;
       state.limit = limit;
+      state.smart = message.smart !== false;
       state.route = route();
-      state.baseline = null;
-      // A user may start the extension during a generation already in progress.
-      if (stopVisible()) {
-        state.baseline = assistantSnapshot();
+      state.baseline = snapshot;
+      state.firstReply = true;
+      state.pendingMessage = null;
+      state.token++;
+      if (generating) {
         state.phase = "generating";
-        state.detail = "ChatGPT yanıt üretiyor.";
+        state.detail = "Mevcut ChatGPT yanıtının bitmesi bekleniyor.";
       }
       state.timer = setInterval(tick, TICK_MS);
+      if (mode === "now" && !generating) {
+        state.phase = "settling";
+        state.stopGoneAt = Date.now();
+        state.textChangedAt = Date.now();
+        state.lastText = snapshot.text;
+        // Already completed response: do not require a newer assistant message.
+        state.baseline = null;
+        state.detail = "Tamamlanmış yanıt kontrol ediliyor.";
+      }
       reply(status());
     }
   });
