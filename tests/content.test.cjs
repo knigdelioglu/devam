@@ -23,9 +23,23 @@ function runSuite(content) {
       closest(selector) { return selector === "form" ? composer : null; }
     };
     const stop = { getClientRects() { return generating ? [1] : []; } };
-    const turns = [
-      { innerText: "Eski yanıt", getAttribute() { return "assistant"; } }
-    ];
+    let finalActions = true;
+    const copy = {
+      disabled: false,
+      getClientRects() { return [1]; },
+      getAttribute(name) { return name === "aria-label" ? "Copy" : null; }
+    };
+    function assistant(text) {
+      return {
+        innerText: text,
+        getAttribute() { return "assistant"; },
+        closest() { return this; },
+        querySelectorAll(selector) {
+          return selector === "button" && finalActions ? [copy] : [];
+        }
+      };
+    }
+    const turns = [assistant("Eski yanıt")];
     const send = {
       disabled: false, getClientRects() { return [1]; },
       closest() { return null; },
@@ -103,8 +117,9 @@ function runSuite(content) {
         if (queued.length) throw new Error("Test callback queue did not settle");
       },
       generating(value) { generating = value; },
+      finalActions(value) { finalActions = value; },
       reply(value) {
-        turns.push({ innerText: value, getAttribute() { return "assistant"; } });
+        turns.push(assistant(value));
       },
       navigate(path) { pathname = path; }
     };
@@ -126,7 +141,7 @@ function runSuite(content) {
   t = tab();
   check("Resumes an already completed reply", () => {
     t.message("DEVAM_START", { mode: "now", limit: 3, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1 &&
       t.sent[0].includes("[[DEVAM:SUR]]") &&
@@ -138,7 +153,7 @@ function runSuite(content) {
     t.reply("Daha iş var.\n[[DEVAM:SUR]]");
     t.generating(false);
     t.advance(700);
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     if (t.sent.length !== 2) return false;
     t.generating(true);
@@ -146,14 +161,14 @@ function runSuite(content) {
     t.reply("Tamamlandı.\n[[DEVAM:TAMAM]]");
     t.generating(false);
     t.advance(700);
-    t.advance(3600);
+    t.advance(10000);
     return t.sent.length === 2 && !t.message("DEVAM_STATUS").active;
   });
 
   t = tab();
   check("Wait mode ignores historical replies", () => {
     t.message("DEVAM_START", { mode: "wait", limit: 3, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 0;
   });
@@ -163,7 +178,7 @@ function runSuite(content) {
     t.reply("Yeni cevap");
     t.generating(false);
     t.advance(700);
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1;
   });
@@ -172,7 +187,7 @@ function runSuite(content) {
   check("Does not overwrite a user's draft", () => {
     t.prompt.innerText = "benim taslağım";
     t.message("DEVAM_START", { mode: "now", limit: 3, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 0 &&
       t.prompt.innerText === "benim taslağım" &&
@@ -182,7 +197,7 @@ function runSuite(content) {
   t = tab();
   check("Simple mode sends literal devam et and obeys limit", () => {
     t.message("DEVAM_START", { mode: "now", limit: 1, smart: false });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent[0] === "devam et" && !t.message("DEVAM_STATUS").active;
   });
@@ -191,7 +206,7 @@ function runSuite(content) {
   check("Other tabs remain stopped", () => {
     const other = tab();
     t.message("DEVAM_START", { mode: "now", limit: 1, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1 &&
       other.sent.length === 0 &&
@@ -201,14 +216,14 @@ function runSuite(content) {
   t = tab();
   check("Missing marker after protocol stops safely", () => {
     t.message("DEVAM_START", { mode: "now", limit: 3, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     t.generating(true);
     t.advance(700);
     t.reply("İşaret unutuldu");
     t.generating(false);
     t.advance(700);
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1 && !t.message("DEVAM_STATUS").active;
   });
@@ -217,7 +232,7 @@ function runSuite(content) {
   check("Starting during generation waits for completion", () => {
     t.generating(true);
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     return t.sent.length === 0;
   });
 
@@ -232,7 +247,7 @@ function runSuite(content) {
   t = tab({ testId: "composer-submit-button", buttonType: "submit" });
   check("New ChatGPT composer submit button sends", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: false });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1 && t.sent[0] === "devam et";
   });
@@ -240,7 +255,7 @@ function runSuite(content) {
   t = tab({ testId: "unlabelled-control", buttonType: "submit" });
   check("Unique composer submit fallback sends", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: false });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1;
   });
@@ -248,7 +263,7 @@ function runSuite(content) {
   t = tab({ missingSend: true });
   check("Unknown button leaves unsent draft with diagnostics", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     for (let i = 0; i < 10; i++) t.flush();
     return t.sent.length === 0 &&
       t.prompt.innerText.includes("Devam protokolü") &&
@@ -259,7 +274,7 @@ function runSuite(content) {
   t = tab({ noopClick: true });
   check("Inert click preserves draft and does not increment count", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     const state = t.message("DEVAM_STATUS");
     return t.sent.length === 0 && state.count === 0 &&
@@ -270,7 +285,7 @@ function runSuite(content) {
   t = tab({ extraParagraphBreaks: true });
   check("Rich text with doubled paragraph breaks sends", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1 && t.sent[0].includes("Devam protokolü");
   });
@@ -278,7 +293,7 @@ function runSuite(content) {
   t = tab({ delayedEditor: true });
   check("Asynchronous composer input sends after update", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1;
   });
@@ -286,9 +301,40 @@ function runSuite(content) {
   t = tab({ falseInsertResult: true, extraParagraphBreaks: true });
   check("False insertText return does not reject inserted text", () => {
     t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
-    t.advance(3600);
+    t.advance(10000);
     t.flush();
     return t.sent.length === 1;
+  });
+
+  t = tab();
+  check("Thinking pause without final controls cannot send", () => {
+    t.message("DEVAM_START", { mode: "wait", limit: 3, smart: true });
+    t.generating(true);
+    t.finalActions(false);
+    t.advance(700);
+    t.reply("Araçların çalışması devam ediyor");
+    t.generating(false);
+    t.advance(700);
+    t.advance(20000);
+    t.flush();
+    return t.sent.length === 0 &&
+      t.message("DEVAM_STATUS").active;
+  });
+
+  check("Sends only after final actions appear and settle again", () => {
+    t.finalActions(true);
+    t.advance(700);
+    t.flush();
+    return t.sent.length === 1;
+  });
+
+  t = tab();
+  check("Stop button visible throughout prevents premature send", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.generating(true);
+    t.advance(22000);
+    t.flush();
+    return t.sent.length === 0;
   });
 
   return results;
