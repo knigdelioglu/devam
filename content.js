@@ -11,7 +11,8 @@
     "bütün iş tamamlandıysa [[DEVAM:TAMAM]] yaz.",
     "Yalnızca bu iki işaretten birini kullan. Tamamladığın işleri gereksiz yere tekrarlama."
   ].join("\n");
-  const SETTLE_MS = 3500;
+  // Tool calls can pause for several seconds between visible updates.
+  const SETTLE_MS = 9000;
   const TICK_MS = 700;
   const state = {
     active: false, phase: "stopped", detail: "Başlatılmadı.",
@@ -30,7 +31,41 @@
     if (visible(exact)) return true;
     return [...document.querySelectorAll("button[aria-label]")].some(button =>
       visible(button) && /^(stop|durdur)(?:\b|\s|$)/i.test(button.getAttribute("aria-label") || "")
-    );
+    ) || hasStopIcon();
+  }
+
+  function hasStopIcon() {
+    // Some ChatGPT layouts draw the blue square stop button with an unlabeled
+    // SVG. Inspect only buttons within this tab's composer, not page-wide SVGs.
+    const composer = getPrompt()?.closest?.("form");
+    if (!composer) return false;
+    return [...composer.querySelectorAll("button")].some(button => {
+      if (!visible(button) || button.disabled) return false;
+      const rect = button.querySelector?.("svg rect");
+      return Boolean(rect &&
+        Number(rect.getAttribute("width")) >= 3 &&
+        Number(rect.getAttribute("height")) >= 3);
+    });
+  }
+
+  function finalResponseVisible() {
+    // The last assistant turn's final action bar is a stronger completion
+    // signal than an absent stop button or text becoming momentarily quiet.
+    // Never accept a copy button from a PREVIOUS completed assistant turn.
+    const messages = document.querySelectorAll('[data-message-author-role="assistant"]');
+    const last = messages[messages.length - 1];
+    if (!last) return false;
+    const turn = last.closest?.('[data-testid^="conversation-turn"]') || last;
+    const buttons = [...turn.querySelectorAll("button")];
+    return buttons.some(button => {
+      if (!visible(button) || button.disabled) return false;
+      const label = [
+        button.getAttribute("aria-label") || "",
+        button.getAttribute("data-testid") || "",
+        button.getAttribute("title") || ""
+      ].join(" ").toLowerCase();
+      return /copy(?:[- ](?:turn|response|message|button|action))?|kopyala/.test(label);
+    });
   }
 
   function assistantSnapshot() {
@@ -218,8 +253,8 @@
 
   function sendAfterInput(token, attempt = 0) {
     if (!state.active || state.token !== token || state.phase !== "composing" || routeChanged()) return;
-    if (stopVisible()) {
-      stop("ChatGPT yeniden üretime geçti; gönderim iptal edildi.");
+    if (stopVisible() || !finalResponseVisible()) {
+      stop("ChatGPT yanıtı henüz tamamlanmamış; gönderim iptal edildi.");
       return;
     }
     const prompt = getPrompt();
@@ -258,7 +293,7 @@
   }
 
   function sendContinuation() {
-    if (!state.active || routeChanged() || state.phase === "composing" || stopVisible()) return;
+    if (!state.active || routeChanged() || state.phase === "composing" || stopVisible() || !finalResponseVisible()) return;
     if (state.count >= state.limit) {
       stop("Tekrar sınırına ulaşıldı.");
       return;
@@ -335,7 +370,7 @@
       state.stopGoneAt = now;
       state.textChangedAt = now;
       state.lastText = assistantSnapshot().text;
-      state.detail = "Yanıtın tamamlanması doğrulanıyor.";
+      state.detail = "Son yanıt ve araçların tamamlanması doğrulanıyor.";
       return;
     }
 
@@ -352,6 +387,10 @@
       return;
     }
     if (now - state.stopGoneAt < SETTLE_MS || now - state.textChangedAt < SETTLE_MS) return;
+    if (!finalResponseVisible()) {
+      state.detail = "Düşünme/araç aşaması veya son yanıt devam ediyor; bitiş araçları bekleniyor.";
+      return;
+    }
     if (!lastTurnIsAssistant() || !snapshot.text ||
         (state.baseline && snapshot.count <= state.baseline.count &&
          snapshot.text === state.baseline.text)) {
