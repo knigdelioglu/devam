@@ -10,11 +10,18 @@ function runSuite(content) {
     let now = 0, messageListener, interval, queued = [], generating = false;
     let pathname = "/c/example";
     const sent = [];
+    let iconGenerating = false;
+    const iconStop = {
+      disabled: false, getClientRects() { return iconGenerating ? [1] : []; },
+      querySelector(selector) {
+        return selector === "svg rect" ? { getAttribute() { return "8"; } } : null;
+      }
+    };
     const composer = {
       contains(button) { return button === send; },
       querySelectorAll(selector) {
         if (selector === 'button[type="submit"]' && options.buttonType === "submit") return [send];
-        if (selector === "button") return options.missingSend ? [] : [send];
+        if (selector === "button") return options.missingSend ? [] : [send, iconStop];
         return [];
       }
     };
@@ -117,6 +124,7 @@ function runSuite(content) {
         if (queued.length) throw new Error("Test callback queue did not settle");
       },
       generating(value) { generating = value; },
+      generatingIcon(value) { iconGenerating = value; },
       finalActions(value) { finalActions = value; },
       reply(value) {
         turns.push(assistant(value));
@@ -336,6 +344,30 @@ function runSuite(content) {
     t.advance(22000);
     t.flush();
     return t.sent.length === 0;
+  });
+
+  t = tab();
+  check("Unlabeled blue square stop icon blocks sending", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.generatingIcon(true);
+    t.advance(12000);
+    t.flush();
+    return t.sent.length === 0 && t.message("DEVAM_STATUS").active;
+  });
+
+  t = tab();
+  check("Final controls must remain present for two seconds", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.advance(10000); // First glimpse of final controls.
+    t.finalActions(false);
+    t.advance(700); // A tool step starts; readiness must reset.
+    t.finalActions(true);
+    t.advance(700);
+    t.flush();
+    if (t.sent.length) return false;
+    t.advance(2100);
+    t.flush();
+    return t.sent.length === 1;
   });
 
   return results;
