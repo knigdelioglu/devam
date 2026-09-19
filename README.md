@@ -37,3 +37,7 @@ Akıllı modla ilk defa devralınan, daha önce bu protokolü almamış yanıtta
 ## Geliştirme
 
 Derleme, bağımlılık veya Node.js gerekmez. `manifest.json`, `content.js`, `popup.html`, `popup.css` ve `popup.js` doğrudan Chrome'a yüklenir.
+
+## Test
+
+`node tests/content.test.cjs` komutu 11 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
