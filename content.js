@@ -18,7 +18,7 @@
     active: false, phase: "stopped", detail: "Başlatılmadı.",
     count: 0, limit: 20, smart: true, timer: null, token: 0,
     route: null, baseline: null, firstReply: true,
-    stopGoneAt: 0, textChangedAt: 0, lastText: "",
+    stopGoneAt: 0, textChangedAt: 0, finalReadyAt: 0, lastText: "",
     pendingMessage: null, sentAt: 0
   };
 
@@ -358,6 +358,7 @@
       state.phase = generating ? "generating" : "settling";
       state.stopGoneAt = now;
       state.textChangedAt = now;
+      state.finalReadyAt = 0;
       state.lastText = snapshot.text;
       if (wasWaiting) state.baseline = snapshot;
       state.detail = generating ? "ChatGPT yanıt üretiyor." : "Yanıt kontrol ediliyor.";
@@ -377,6 +378,7 @@
     if (state.phase !== "settling") return;
     if (generating) {
       state.phase = "generating";
+      state.finalReadyAt = 0;
       state.detail = "ChatGPT yanıt üretiyor.";
       return;
     }
@@ -384,13 +386,21 @@
     if (snapshot.text !== state.lastText) {
       state.lastText = snapshot.text;
       state.textChangedAt = now;
+      state.finalReadyAt = 0;
       return;
     }
     if (now - state.stopGoneAt < SETTLE_MS || now - state.textChangedAt < SETTLE_MS) return;
     if (!finalResponseVisible()) {
+      state.finalReadyAt = 0;
       state.detail = "Düşünme/araç aşaması veya son yanıt devam ediyor; bitiş araçları bekleniyor.";
       return;
     }
+    if (!state.finalReadyAt) {
+      state.finalReadyAt = now;
+      state.detail = "Son yanıtın tamamlandığı ek olarak doğrulanıyor.";
+      return;
+    }
+    if (now - state.finalReadyAt < 2000) return;
     if (!lastTurnIsAssistant() || !snapshot.text ||
         (state.baseline && snapshot.count <= state.baseline.count &&
          snapshot.text === state.baseline.text)) {
@@ -455,6 +465,7 @@
         state.phase = "settling";
         state.stopGoneAt = Date.now();
         state.textChangedAt = Date.now();
+        state.finalReadyAt = 0;
         state.lastText = snapshot.text;
         // Already completed response: do not require a newer assistant message.
         state.baseline = null;
