@@ -42,7 +42,8 @@
       awaiting: "Yeni yanıt bekleniyor",
       generating: "Yanıt üretiliyor",
       settling: "Yanıt kontrol ediliyor",
-      composing: "Devam gönderiliyor"
+      composing: "Devam hazırlanıyor",
+      submitting: "Gönderim doğrulanıyor"
     };
     stateLabel.textContent = labels[status.phase] || "Etkin";
     detail.textContent = status.detail;
