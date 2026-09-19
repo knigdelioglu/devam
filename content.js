@@ -65,6 +65,17 @@
       : prompt.innerText || prompt.textContent || "").trim();
   }
 
+  // Contenteditable editors can render paragraph boundaries as two newlines
+  // (or NBSPs) even when the typed message contains only one. Preserve the
+  // original text for sending, but compare normalized visible characters.
+  function comparableText(text) {
+    return (text || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function matchesMessage(prompt, message) {
+    return comparableText(promptText(prompt)) === comparableText(message);
+  }
+
   function getSendButton(prompt) {
     // Limit fallback discovery to the composer, not other dialogs or the page.
     const composer = prompt.closest?.("form") ||
@@ -156,10 +167,15 @@
       setter.call(prompt, message);
       prompt.dispatchEvent(new Event("input", { bubbles: true }));
     } else {
-      // Use the native editing input path rather than assigning innerHTML in React.
-      if (!document.execCommand("insertText", false, message)) return false;
+      // ChatGPT's rich-text composer can normalize newlines asynchronously.
+      // A false execCommand result alone is not evidence that the text was
+      // not inserted. Verify the editor separately before any send attempt.
+      const inserted = document.execCommand("insertText", false, message);
+      if (!inserted && !matchesMessage(prompt, message)) {
+        return false;
+      }
     }
-    return promptText(prompt) === message;
+    return true;
   }
 
   function marker(text) {
@@ -189,7 +205,7 @@
       }
       return;
     }
-    if (current !== state.pendingMessage) {
+    if (comparableText(current) !== comparableText(state.pendingMessage)) {
       stop("Gönderim sırasında mesaj kutusu değişti; tekrar gönderilmedi.");
       return;
     }
@@ -207,8 +223,16 @@
       return;
     }
     const prompt = getPrompt();
-    if (!prompt || promptText(prompt) !== state.pendingMessage) {
-      stop("Mesaj kutusu değişti; gönderim iptal edildi.");
+    if (!prompt) {
+      stop("Mesaj kutusu bulunamadı; gönderim iptal edildi.");
+      return;
+    }
+    if (!matchesMessage(prompt, state.pendingMessage)) {
+      if (attempt < 8 && !promptText(prompt)) {
+        setTimeout(() => sendAfterInput(token, attempt + 1), 200);
+      } else {
+        stop("Mesaj kutusundaki metin beklenen devam mesajıyla eşleşmedi; taslak korunarak durduruldu.");
+      }
       return;
     }
     const send = getSendButton(prompt);
@@ -220,7 +244,6 @@
       }
       return;
     }
-    // Capture old answer once; do not count a click as an actual sent message.
     state.baseline = assistantSnapshot();
     state.phase = "submitting";
     state.detail = "Gönder düğmesine basıldı; gönderim doğrulanıyor.";
@@ -254,7 +277,7 @@
     state.phase = "composing"; // Consumes this reply before any asynchronous work.
     state.detail = "Devam mesajı hazırlanıyor.";
     if (!insertMessage(prompt, message)) {
-      stop("Mesaj kutusuna güvenilir biçimde yazılamadı.");
+      stop("Editör metin ekleme komutunu kabul etmedi; taslak korunarak durduruldu.");
       return;
     }
     const token = state.token;
