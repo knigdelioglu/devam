@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Devam",
+  "version": "0.1.0",
+  "description": "ChatGPT yanıtı tamamlandığında isteğe bağlı otomatik devam et gönderir.",
+  "permissions": [
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Devam — ChatGPT otomatik devam",
+    "default_popup": "popup.html"
+  }
+}
