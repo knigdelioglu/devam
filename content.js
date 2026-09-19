@@ -216,7 +216,7 @@
          (snapshot.count === state.baseline.count && snapshot.text !== state.baseline.text));
       if (!generating && !changed) {
         // Detect a send button that did not actually dispatch a user turn.
-        if (state.phase === "awaiting" && now - state.sentAt > 15000) {
+        if (state.phase === "awaiting" && now - state.sentAt > 60000) {
           stop("Yeni yanıt başlamadı; devam gönderimi doğrulanamadı.");
         }
         return;
