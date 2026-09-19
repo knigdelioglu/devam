@@ -252,6 +252,17 @@ function runSuite(content) {
       t.message("DEVAM_STATUS").detail.includes("Gönder düğmesi bulunamadı");
   });
 
+  t = tab({ noopClick: true });
+  check("Inert click preserves draft and does not increment count", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.advance(3600);
+    t.flush();
+    const state = t.message("DEVAM_STATUS");
+    return t.sent.length === 0 && state.count === 0 &&
+      !state.active && state.detail.includes("mesaj kutusu boşalmadı") &&
+      t.prompt.innerText.includes("Devam protokolü");
+  });
+
   return results;
 }
 
