@@ -13,6 +13,7 @@ ChatGPT'de yanıt tamamlanınca yalnızca seçilen sekmede otomatik devam mesaj�
 
 - **Şimdi devam et:** Bir sohbet daha önce tamamlanmışsa önce yanıtın sabit olduğunu doğrular, ardından devam mesajı gönderir. ChatGPT zaten üretiyorsa yeni mesaj göndermeden o yanıtı bekler.
 - **Yanıtı bekle:** Daha önce tamamlanmış bir cevaba dokunmaz; başlayan/mevcut yanıtın bitmesini bekler.
+- **İlk gönderimi elle yapmak istersen:** Mesajı kutuya yaz veya önceki denemeden kalan taslağı koru; eklentiden **Yanıtı bekle** seç, ardından ChatGPT'nin mavi gönder düğmesine kendin bas. Eklenti ilk yanıtı bekler ve sonra kendisi devam eder. İlk manuel mesaj otomatik gönderim sayacına dahil değildir.
 - Her sekmenin durumu ve tekrar sayacı ayrıdır. Bir sekmede başlatmak diğer ChatGPT sekmelerini etkilemez.
 - Başlangıçta kapalıdır. Sekme yenilenince veya başka sohbete geçince durur.
 
@@ -32,6 +33,7 @@ ChatGPT arayüzü değişirse eklenti mesajı kutuda taslak olarak bırakır, g�
 ## Koruma ve sınırlar
 
 - Gönderme öncesinde stop düğmesinin kaybolmasını ve son cevabın yaklaşık 3,5 saniye sabit kalmasını bekler.
+- ChatGPT zengin metin editörünün satır sonlarını iki boş satır veya bölünmüş paragraflarla göstermesi, metni değiştirmediği sürece gönderimi engellemez. Gerçek metin değişirse yine durur.
 - Kullanıcının mesaj kutusundaki taslağına yazmaz; eklenti tarafından hazırlanan mesaj değiştirilirse göndermez.
 - Her sekmede ayrı en fazla 1–100 otomatik gönderim (varsayılan 20).
 - Mesaj gönderimi / yeni yanıt doğrulanamazsa, sayfa/sohbet değişirse veya ChatGPT arayüzündeki düğmeler tanınmazsa durabilir.
@@ -44,4 +46,4 @@ Derleme, bağımlılık veya Node.js gerekmez. `manifest.json`, `content.js`, `p
 
 ## Test
 
-`node tests/content.test.cjs` komutu 15 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
+`node tests/content.test.cjs` komutu 18 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
