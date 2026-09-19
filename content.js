@@ -221,11 +221,12 @@
         }
         return;
       }
+      const wasWaiting = state.phase === "waiting";
       state.phase = generating ? "generating" : "settling";
       state.stopGoneAt = now;
       state.textChangedAt = now;
       state.lastText = snapshot.text;
-      if (state.phase === "waiting") state.baseline = snapshot;
+      if (wasWaiting) state.baseline = snapshot;
       state.detail = generating ? "ChatGPT yanıt üretiyor." : "Yanıt kontrol ediliyor.";
       return;
     }
