@@ -64,8 +64,12 @@ function runSuite(content) {
         return [];
       },
       execCommand(_command, _ui, value) {
-        prompt.innerText = value;
-        return true;
+        const rendered = options.extraParagraphBreaks
+          ? value.replace(/\\n/g, "\\n\\n")
+          : value;
+        if (options.delayedEditor) queued.push(() => { prompt.innerText = rendered; });
+        else prompt.innerText = rendered;
+        return !options.falseInsertResult;
       }
     };
     const location = { get pathname() { return pathname; } };
@@ -261,6 +265,30 @@ function runSuite(content) {
     return t.sent.length === 0 && state.count === 0 &&
       !state.active && state.detail.includes("mesaj kutusu boşalmadı") &&
       t.prompt.innerText.includes("Devam protokolü");
+  });
+
+  t = tab({ extraParagraphBreaks: true });
+  check("Rich text with doubled paragraph breaks sends", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.advance(3600);
+    t.flush();
+    return t.sent.length === 1 && t.sent[0].includes("Devam protokolü");
+  });
+
+  t = tab({ delayedEditor: true });
+  check("Asynchronous composer input sends after update", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.advance(3600);
+    t.flush();
+    return t.sent.length === 1;
+  });
+
+  t = tab({ falseInsertResult: true, extraParagraphBreaks: true });
+  check("False insertText return does not reject inserted text", () => {
+    t.message("DEVAM_START", { mode: "now", limit: 2, smart: true });
+    t.advance(3600);
+    t.flush();
+    return t.sent.length === 1;
   });
 
   return results;
