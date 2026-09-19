@@ -32,7 +32,8 @@ ChatGPT arayüzü değişirse eklenti mesajı kutuda taslak olarak bırakır, g�
 
 ## Koruma ve sınırlar
 
-- Gönderme öncesinde stop düğmesinin kaybolmasını ve son cevabın yaklaşık 3,5 saniye sabit kalmasını bekler.
+- Gönderme öncesinde durdurma düğmesinin (etiketsiz mavi kare dâhil) kaybolmasını, son cevabın en az 9 saniye sabit kalmasını **ve son asistan yanıtının kopyalama gibi tamamlanmış yanıt araçlarının görünmesini** bekler. Bu araçlar 2 saniye daha görünür kalmalıdır; düşünme veya araç kullanma arasındaki duraklamalar tek başına bitiş sayılmaz.
+- Son yanıtın tamamlandığını gösteren araçlar ChatGPT'nin farklı arayüzünde tespit edilemezse tahmin yürütüp devam etmek yerine bekler. Bu güvenli tercih otomatik devamın bazı sürümlerde çalışmamasına yol açabilir.
 - ChatGPT zengin metin editörünün satır sonlarını iki boş satır veya bölünmüş paragraflarla göstermesi, metni değiştirmediği sürece gönderimi engellemez. Gerçek metin değişirse yine durur.
 - Kullanıcının mesaj kutusundaki taslağına yazmaz; eklenti tarafından hazırlanan mesaj değiştirilirse göndermez.
 - Her sekmede ayrı en fazla 1–100 otomatik gönderim (varsayılan 20).
@@ -46,4 +47,4 @@ Derleme, bağımlılık veya Node.js gerekmez. `manifest.json`, `content.js`, `p
 
 ## Test
 
-`node tests/content.test.cjs` komutu 18 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
+`node tests/content.test.cjs` komutu 23 DOM/Chrome simülasyonu davranış testini çalıştırır. Canlı ChatGPT arayüzünü sınamaz.
