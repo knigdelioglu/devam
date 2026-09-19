@@ -166,6 +166,40 @@
     return text.match(/\[\[DEVAM:(SUR|TAMAM)\]\]\s*$/)?.[1] || null;
   }
 
+  function confirmSend(token, attempt = 0) {
+    if (!state.active || state.token !== token ||
+        state.phase !== "submitting" || routeChanged()) return;
+    const prompt = getPrompt();
+    if (!prompt) {
+      stop("Gönderim sonrası mesaj kutusu bulunamadı; sonuç doğrulanamadı.");
+      return;
+    }
+    const current = promptText(prompt);
+    // Composer clearing or ChatGPT switching into generation is evidence
+    // that the click actually submitted the turn; a click alone is not.
+    if (!current || stopVisible()) {
+      state.count++;
+      state.firstReply = false;
+      state.pendingMessage = null;
+      if (state.count >= state.limit) {
+        stop("Tekrar sınırına ulaşıldı (" + state.limit + ").");
+      } else {
+        state.phase = "awaiting";
+        state.detail = "Mesaj gönderildi; yeni yanıt bekleniyor.";
+      }
+      return;
+    }
+    if (current !== state.pendingMessage) {
+      stop("Gönderim sırasında mesaj kutusu değişti; tekrar gönderilmedi.");
+      return;
+    }
+    if (attempt >= 12) {
+      stop("Gönder düğmesine basıldı ancak mesaj kutusu boşalmadı; taslak bırakıldı. Otomatik tekrar denenmedi.");
+      return;
+    }
+    setTimeout(() => confirmSend(token, attempt + 1), 250);
+  }
+
   function sendAfterInput(token, attempt = 0) {
     if (!state.active || state.token !== token || state.phase !== "composing" || routeChanged()) return;
     if (stopVisible()) {
@@ -186,18 +220,18 @@
       }
       return;
     }
-    // Capture the old response before clicking; watch for a genuinely new reply.
+    // Capture old answer once; do not count a click as an actual sent message.
     state.baseline = assistantSnapshot();
-    state.firstReply = false;
-    state.phase = "awaiting";
-    state.detail = "Devam gönderildi; yeni yanıt bekleniyor.";
-    state.pendingMessage = null;
+    state.phase = "submitting";
+    state.detail = "Gönder düğmesine basıldı; gönderim doğrulanıyor.";
     state.sentAt = Date.now();
-    send.click();
-    state.count++;
-    if (state.count >= state.limit) {
-      stop("Tekrar sınırına ulaşıldı (" + state.limit + ").");
+    try {
+      send.click();
+    } catch {
+      stop("Gönder düğmesine tıklanamadı; taslak bırakıldı.");
+      return;
     }
+    setTimeout(() => confirmSend(token), 250);
   }
 
   function sendContinuation() {
